@@ -1,0 +1,11 @@
+from cozmo_fsm import *
+
+class SuccessOrFailure(StateMachineProgram):
+
+    destination = Pose(300,50,0,angle_z=degrees(math.nan))
+
+    $setup{
+        pilot: PilotToPose(self.destination)
+        pilot =PILOT(GoalCollides)=> Say('I can not go there')
+        pilot =C=> Say('complete')
+    }

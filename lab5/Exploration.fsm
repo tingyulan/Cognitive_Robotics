@@ -1,0 +1,55 @@
+from cozmo_fsm import*
+
+walk_through=[]
+Door_Aruco = {'Doorway-40':['Aruco-39', 'Aruco-40', 'Aruco-41', 'Aruco-42', 'Aruco-43', 'Aruco-44'], \
+		'Doorway-46':['Aruco-45', 'Aruco-46', 'Aruco-47', 'Aruco-48', 'Aruco-49', 'Aruco-50']}
+
+
+# Detect whether detect a door
+# Return DoorWay if detect one
+# Return Failure if no doorway is detected
+class SeeDoor(StateNode):
+	def start(self, event=None):
+		global walk_through
+		super().start(event)
+		flg = False
+		objects = self.robot.world.world_map.objects
+		for obj in objects:
+			if(("Doorway" in obj) and (obj not in walk_through)):
+				flg = True
+				walk_through.append(obj)
+				self.post_data(obj)
+		if flg is False:
+			self.post_failure()
+
+
+# Detect whether detect a aruco
+# Return Completion if detect one
+# Return Failure if no aruco is detected
+class SeeAruco(StateNode):
+	def start(self, event=None):
+		super().start(event)
+		flg = False
+		objects = self.robot.world.world_map.objects
+		for obj in objects:
+			if(("Aruco" in obj) and (obj not in Door_Aruco[walk_through[0]])):
+				flg = True
+				self.post_completion()
+		if flg is False:
+			self.post_failure()
+
+
+# Pass through two adjacent walls
+class Exploration(StateMachineProgram):
+	$setup{
+		SetHeadAngle(10) =T(2)=> detect1:SeeDoor()
+		detect1 =D=> doorpass1: DoorPass()
+		detect1 =F=> Turn(5) =C=> detect1
+
+		doorpass1 =C=> SetHeadAngle(10) =T(2)=> Forward(150) =C=> detect2:SeeDoor()
+		detect2 =D=> doorpass2: DoorPass() =C=> Say('Complete')
+		detect2 =F=> Turn(5) =C=> detect_aruco: SeeAruco()
+
+		detect_aruco =C=> Forward(-20) =C=> detect2
+		detect_aruco =F=> detect2
+	}
