@@ -1,0 +1,58 @@
+import cv2
+import numpy as np
+from cozmo_fsm import *
+
+class MatchShape(StateMachineProgram):
+    def __init__(self):
+        super().__init__(aruco=False, particle_filter=False, cam_viewer=False,
+                         annotate_sdk=False)
+
+    def start(self):
+        dummy = numpy.array([[0]], dtype='uint8')
+        super().start()
+
+    def do_contours(self, filename):
+        colors = [(0,0,255), (0,255,0), (255,0,0),
+                  (255,255,0), (255,0,255), (0,255,255),
+                  (0,0,128), (0,128,0), (128,0,0),
+                  (128,128,0), (0,128,128), (128,0,128),
+                  (255,255,255)]
+        image = filename
+        image_gray = image
+        ret, image_thresh = cv2.threshold(image_gray, 127, 255, 0)
+        contours, hierarchy = \
+                cv2.findContours(image_thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        areas = [(i, cv2.contourArea(contours[i])) for i in range(len(contours))]
+        areas.sort(key=lambda x: x[1])
+        areas.reverse()
+        minArea = 50
+        result = []
+        score = []
+        # print(hierarchy)
+        img1 = cv2.imread('Star.png',0)
+        ret, thresh = cv2.threshold(img1, 127, 255,0)
+        contours_img1,hierarchy_img1 = cv2.findContours(thresh,2,1)
+        cnt1 = contours_img1[0]
+
+        for area_entry in areas:
+            if area_entry[1] < minArea:
+                break
+            temp = index = area_entry[0]
+            depth = -1
+            while temp != -1 and depth < len(colors)-1:
+                depth += 1
+                temp = hierarchy[0,temp,3]
+            contour = contours[index]
+            cv2.drawContours(image, [contour], 0, colors[depth], 1)
+            result.append(contour)
+            score.append(cv2.matchShapes(cnt1,contour,1,0.0))
+
+        cv2.namedWindow("Camera View")
+        cv2.imshow("Camera View", image)
+        return min(score)
+
+
+    def user_image(self,image,gray):
+        cv2.waitKey(1)
+        score = self.do_contours(gray)
+        print(score)

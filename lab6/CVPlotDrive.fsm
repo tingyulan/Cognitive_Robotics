@@ -1,0 +1,65 @@
+from cozmo_fsm import *
+
+"""
+    Drive forward 25 mm and measure actual forward travel and sideways drift.
+    Display as a scatter plot.
+"""
+
+import matplotlib.pyplot as plt
+
+class CVPlotDrive(StateMachineProgram):
+    def __init__(self):
+        super().__init__(aruco=False, particle_filter=False, cam_viewer=False,
+                         force_annotation=True, annotate_sdk=False)
+        self.count=0;
+
+    def start(self):
+        super().start()
+
+    def user_image(self,image,gray):
+        self.count = self.count+1
+        if(self.count%5==0):
+            plt.figure('camer view')
+            plt.pause(0.1)
+            plt.imshow(gray, cmap='gray')
+
+
+    class Setup(StateNode):
+        def start(self,event=None):
+            super().start()
+            self.parent.fig = plt.figure('track')
+            self.parent.ax = ax = self.parent.fig.add_subplot(111)
+            ax.set_xlim(-5,5)
+            ax.set_ylim(23,29)
+            ax.plot([-5,5],[25,25],'g--')
+            ax.plot([0,0],[23,29],'r--')
+            ax.set_xlabel('Drift (deg.)')
+            ax.set_ylabel('Travel Distance')
+            self.parent.old_pose = self.robot.pose
+
+
+    class AddPoint(StateNode):
+        def start(self,event=None):
+            super().start()
+            fwd = self.robot.pose.position.x - self.parent.old_pose.position.x
+            drift = self.robot.pose.rotation.angle_z.degrees - self.parent.old_pose.rotation.angle_z.degrees
+            print('fwd=',fwd,'drift=',drift)
+            self.parent.ax.plot(drift,fwd,'bo',linestyle='None')
+            self.parent.old_pose = self.robot.pose
+
+    class ShowPlot(StateNode):
+        def start(self,event=None):
+            super().start()
+            plt.figure('track')
+            plt.show()
+
+
+    $setup{
+        self.Setup() =N=> loop
+
+        loop: Iterate(range(5))
+        loop =D=> Forward(25) =C=> self.AddPoint() =Next=> loop
+        loop =C=> show
+
+        show: self.ShowPlot()
+    }

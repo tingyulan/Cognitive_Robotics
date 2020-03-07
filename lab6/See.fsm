@@ -1,0 +1,100 @@
+from cozmo_fsm import *
+
+class See(StateMachineProgram):
+
+    def __init__(self):
+        super().__init__(speech=True, speech_debug=True)
+
+    class Heard(Say):
+        def start(self,event):
+            items = []
+            obj = self.robot.world.world_map.objects
+            cubes = ['Cube-1', 'Cube-2', 'Cube-3']
+
+            for c in cubes:
+                if c in obj:
+                    items.append(c)
+
+            for (key,value) in obj.items():
+                if isinstance(value, WallObj):
+                    items.append(key)
+
+
+            self.text = 'i see %s' % items
+            super().start(event)
+
+
+    class GrabSuccess(PickUpObject):
+        def start(self,event):
+            self.object = self.parent.targetCube
+            super().start(event)
+            
+
+    class GrabFailure(Say):
+        def start(self,event):
+            self.text = 'i dont know where %s is' % self.parent.targetCube
+            super().start(event)
+
+    class CubeCheck(StateNode):
+
+        def start(self, event):
+            cube_str = event.result.groups()[0]
+            if cube_str == 'cube1':
+                targetCube = cube1
+            elif cube_str == 'cube2':
+                targetCube = cube2
+            else:
+                targetCube = cube3
+
+            self.parent.targetCube = targetCube
+            super().start(event)
+
+            if targetCube.is_visible:
+               self.post_success()
+            else:
+               self.post_failure()
+
+    class DoorFailure(Say):
+        def start(self,event):
+            print('SAYYYYYYY')
+            self.text = 'i dont know where doorway %s is' % self.parent.targetDoor
+            super().start(event)
+    
+    class DoorSuccess(StateNode):
+        def start(self, event=None):
+            self.post_data(self.parent.targetDoor)
+
+    class DoorCheck(StateNode):
+
+        def start(self, event):
+            door_id = int(event.words[-1])
+            print('!!!!!!!!!!!!!!!%d' %door_id)
+            self.parent.targetDoor = door_id
+            super().start(event)
+            
+
+            doorsinview = self.robot.world.world_map.generate_doorway_list()
+            doors = []
+            for door in doorsinview:
+                doors.append(int(door[0].id[8:]))
+
+            if door_id in doors:
+                self.post_success()
+            else:
+                self.post_failure()
+                print('FAILLLLLLLLLLL')
+
+            
+
+    
+    $setup{
+        loop: Say('what now')
+        cubecheck: self.CubeCheck()
+        loop =Hear('cozmo what do you see') => self.Heard() =C=> loop
+        loop =Hear('cozmo please grab (cube1|cube2|cube3)') =>cubecheck =S=>self.GrabSuccess()=C=> loop
+        cubecheck =F=> self.GrabFailure() =C=> loop
+        
+        doorcheck: self.DoorCheck()
+        loop =Hear('cozmo please drive through doorway number [0-9][0-9]') =>doorcheck =S=>self.DoorSuccess()=D=>DoorPass()=C=> loop
+        doorcheck=F=>self.DoorFailure()=C=> loop
+    }
