@@ -1,0 +1,61 @@
+from cozmo_fsm import*
+from math import atan2
+
+class CubeCheck(StateNode):
+    def __init__(self, cubeA, cubeB):
+        self.cubeA = cubeA
+        self.cubeB = cubeB
+        super().__init__()
+
+    def start(self, event=None):
+        if self.running: return
+        super().start(event)
+        
+        if self.cubeA.is_visible:
+            self.post_success()
+        elif self.cubeB.is_visible:
+            self.post_completion()
+        else:
+            self.post_failure()
+
+class CalculateAngle(StateNode):
+    def __init__(self, flg_love):
+        self.flg_love = flg_love
+        super().__init__()
+
+    def start(self, event=None):
+        if self.running: return
+        super().start(event)
+    
+        if self.flg_love==1:
+            a = atan2(cube1.pose.position.y, cube1.pose.position.x)
+            b = robot.pose.rotation.angle_z.radians
+            angle = a-b
+        else:
+            a = atan2(cube2.pose.position.y, cube2.pose.position.x)
+            b = robot.pose.rotation.angle_z.radians
+            angle = a-b+pi
+        
+        #print(Angle(radians=angle))
+        self.post_data(Angle(radians=angle))
+
+class LoveHate(StateMachineProgram):
+    $setup{
+        launch: StateNode() =N=> check
+        
+        check: CubeCheck(cube1, cube2)
+        check =S=> {love, front}
+
+        check =C=> {hate, back} =C=> check
+        check =F=> check
+
+        love: Say('love it')
+        front: CalculateAngle(1) =D=> frontturn:Turn()
+
+        hate: Say('hate it')
+        back: CalculateAngle(0) =D=> backturn:Turn()
+
+        {love, frontturn} =C=> check
+        {hate, backturn} =C=> check
+     }
+     

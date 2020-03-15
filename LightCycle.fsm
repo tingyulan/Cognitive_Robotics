@@ -1,0 +1,64 @@
+from cozmo_fsm import *
+from cozmo.objects import *
+import asyncio
+import sys
+
+class Mode1(StateNode):
+    $setup {
+        StateNode() =N=> {control1, control2, control3} 
+        control1: CubeSetLight(cube1, "red")
+        control2: CubeSetLight(cube2, "green")
+        control3: CubeSetLight(cube3, "blue")
+    }
+
+class Mode2(StateNode):
+    $setup {
+        StateNode() =N=> {control1, control2, control3}
+        control1: CubeSetLight(cube1, "green")
+        control2: CubeSetLight(cube2, "blue")
+        control3: CubeSetLight(cube3, "red")
+    }
+
+class Mode3(StateNode):
+    $setup {
+        StateNode() =N=> {control1, control2, control3}
+        control1: CubeSetLight(cube1, "blue")
+        control2: CubeSetLight(cube2, "red")
+        control3: CubeSetLight(cube3, "green")
+    }
+
+
+class CubeSetLight(StateNode):
+    def __init__(self, cube, light_color):
+        self.cube = cube
+        self.light_color = light_color
+        super().__init__()
+
+    def start(self, event=None):
+        if self.running: return
+        super().start(event)
+        if self.cube is not None:
+                if self.light_color=="red":
+                    self.cube.set_lights(cozmo.lights.red_light)
+                elif self.light_color=="green":
+                    self.cube.set_lights(cozmo.lights.green_light)
+                elif self.light_color=="blue":
+                    self.cube.set_lights(cozmo.lights.blue_light)
+        else:
+            cozmo.logger.warning("Cozmo is not connected to a LightCube")
+
+class AllLightOff(StateNode):
+    def start(self, event=None):
+        if self.running: return
+        super().start(event)
+        cube1.set_lights(cozmo.lights.off_light)
+        cube2.set_lights(cozmo.lights.off_light)
+        cube3.set_lights(cozmo.lights.off_light)
+
+class LightCycle(StateMachineProgram):
+    $setup {
+        launcher: StateNode() =N=> mode1
+        mode1: Mode1() =Tap=> mode2
+        mode2: Mode2() =Tap=> mode3
+        mode3: Mode3() =Tap=> mode1
+    }
