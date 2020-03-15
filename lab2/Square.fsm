@@ -1,0 +1,12 @@
+from cozmo_fsm import *
+
+class ForwardTurn(StateNode):
+    $setup{
+        Forward(100) =C=> Turn(90) =C=> ParentCompletes()
+    }
+
+
+class Square(StateMachineProgram):
+    $setup{
+        ForwardTurn() =C=> ForwardTurn() =C=> ForwardTurn() =C=> ForwardTurn() =C=> Say('Cozmo squared')
+    }
