@@ -1,0 +1,23 @@
+from cozmo_fsm import*
+
+class GetDist(StateNode):
+    def start(self, event=None):
+        if self.running: return
+        super().start(event)
+
+        target = geometry.point(0,0,100)
+        M = robot.kine.joint_to_joint('camera', 'front_axle')
+        result = M.dot(target)
+        
+        print(result[0])
+        self.post_completion()
+
+class KinematicCalculation(StateMachineProgram):
+    $setup{
+            SetHeadAngle(40) =C=> GetDist() =C=> 
+            SetHeadAngle(30) =C=> GetDist() =C=> 
+            SetHeadAngle(20) =C=> GetDist() =C=> 
+            SetHeadAngle(10) =C=> GetDist() =C=> 
+            SetHeadAngle(0) =C=> GetDist() =C=> 
+            SetHeadAngle(-10) =C=> GetDist()
+    }

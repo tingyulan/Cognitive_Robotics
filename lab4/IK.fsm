@@ -1,0 +1,34 @@
+from cozmo_fsm import*
+from math import atan2, pi, cos, acos
+
+cube_num = 3
+x=150
+y=45/2
+z=45*cube_num
+
+origin_THC = (atan2(z-35, x+10)+atan2(7.5, 15))    #radius
+HCT = pi - atan2(7.5, 15)  #radius
+HT = ((x+100)**2 + (z-35)**2) **0.5
+HC = (15**2 + 7.5**2)**0.5
+
+a = 1
+b = -2*HC*cos(HCT)
+c = HC**2 - HT**2
+D = b**2-4*a*c
+
+D_sq = D**0.5
+ideal_CT_pos = (-b+D_sq)/2
+ideal_CT_neg = (-b-D_sq)/2
+
+ideal_cosCHT = (HC**2 + HT**2 - ideal_CT_pos**2) / (2*HC*HT)
+ideal_CHT = acos(ideal_cosCHT)
+
+head_angle = (origin_THC-ideal_CHT) *180/pi  #degree
+turn_angle = atan2(y,x+19)/pi*180
+
+print(turn_angle, head_angle)
+
+class IK(StateMachineProgram):
+    $setup{
+            Turn(turn_angle) =C=> SetHeadAngle(head_angle)
+    }
