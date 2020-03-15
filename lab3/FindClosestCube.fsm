@@ -1,0 +1,46 @@
+from cozmo_fsm import*
+import numpy as numpy
+
+class CalculateDistance(StateNode):
+	def start(self, event=None):
+		super().start(event)
+		minCube = -1
+		minVal = 9999999999
+		rx = robot.pose.position.x
+		ry = robot.pose.position.y
+
+		dis1 = sqrt((cube1.pose.position.x-rx)**2+(cube1.pose.position.y-ry)**2)
+		if cube1.is_visible:
+			minCube = 0
+			minVal = dis1
+
+		dis2 = sqrt((cube2.pose.position.x-rx)**2+(cube2.pose.position.y-ry)**2)
+		if dis2 < minVal and cube2.is_visible:
+			minCube = 1
+			minVal = dis2
+
+		dis3 = sqrt((cube3.pose.position.x-rx)**2+(cube3.pose.position.y-ry)**2)
+		if dis3 < minVal and cube3.is_visible:
+			minCube = 2
+			minVal = dis3
+		
+		self.post_data(minCube)
+
+class CalculateAngle(StateNode):
+	def start(self, event=None):
+		super().start(event)
+		# print("In Agl")
+		cubes = [cube1, cube2, cube3]
+		
+		if isinstance(event, DataEvent):
+			cube = cubes[event.data]
+			a = atan2(cube.pose.position.y, cube.pose.position.x)
+			b = robot.pose.rotation.angle_z.radians
+			angle = a-b
+			self.post_data(Angle(radians=angle))
+
+
+class FindClosestCube(StateMachineProgram):
+ 	$setup{
+        CalculateDistance() =D=> CalculateAngle() =D=> Turn()
+    }

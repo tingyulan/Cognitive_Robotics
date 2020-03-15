@@ -1,0 +1,9 @@
+
+from cozmo_fsm import*
+import numpy as np
+
+class Toss(StateMachineProgram):
+ 	$setup{
+		SetLiftHeight(0) =C=> MoveLift(200)        
+        
+    }

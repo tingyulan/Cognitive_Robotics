@@ -1,0 +1,42 @@
+from cozmo_fsm import*
+origx = 0.0
+origy = 0.0
+R=[]
+# Our result of R = 20.0563444
+
+class GetPose(StateNode):
+	def start(self, event=None):
+		global origx
+		global origy
+
+		if self.running: return
+		super().start(event)
+
+		x = robot.pose.position.x
+		y = robot.pose.position.y
+
+		xdiff = x - origx
+		ydiff = y - origy
+		r = 0.5*(sqrt(xdiff**2 + ydiff**2))
+		origx = x
+		origy = y
+
+		R.append(r)
+
+		self.post_completion()
+
+class Calculate(StateNode):
+	def start(self, event=None):
+		global R
+
+		if self.running: return
+		super().start(event)
+
+		R = np.asarray(R).mean()
+		print(R)
+
+class DistanceR(StateMachineProgram):
+ 	$setup{
+        turn: Iterate(10) =CNext=> Calculate()
+        turn  =D=> Turn(180) =C=> GetPose() =CNext=> turn
+    }

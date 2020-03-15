@@ -1,0 +1,26 @@
+from cozmo_fsm import *
+from cozmo.util import degrees, Pose
+
+ARUCO_MARKER_SIZE = 50   # millimeters
+
+class Particle(StateMachineProgram):
+    def __init__(self):
+        landmarks = {
+            # 'Aruco-0' : Pose(-55, 160, 0, angle_z=degrees(-90)),
+            'Aruco-1' : Pose( 0, 160, 0, angle_z=degrees(-90)),
+            #'Aruco-2' : Pose(160,  55, 0, angle_z=degrees(180)),
+            'Aruco-3' : Pose(55, -150, 0, angle_z=degrees(90))
+        }
+
+        pf = ParticleFilter(robot,
+                            landmarks = landmarks,
+                            #sensor_model = ArucoDistanceSensorModel(robot)
+                            #sensor_model = ArucoBearingSensorModel(robot)
+                            sensor_model = ArucoCombinedSensorModel(robot)
+        )
+
+        super().__init__(aruco_marker_size=ARUCO_MARKER_SIZE,
+                         particle_filter=pf)
+    $setup {
+      SetLiftHeight(0) =C=> Turn(-90) =C=> Forward(55) =C=> Turn(-90)
+    }
