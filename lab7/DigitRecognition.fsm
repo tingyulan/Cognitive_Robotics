@@ -1,0 +1,183 @@
+from cozmo_fsm import *
+import time
+import numpy as np
+import cv2
+
+import torch
+import torchvision
+import torchvision.transforms as transforms
+import torch.nn as nn
+
+class OneConvLayer(nn.Module):
+        def __init__(self, in_dim, out_dim, nkernels):
+            super(OneConvLayer, self).__init__()
+            self.network1 = nn.Sequential(
+            nn.Conv2d(in_channels=1, out_channels=32, kernel_size=5, stride=1, padding=2),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),
+            )
+            self.network2 = nn.Linear(nkernels*14*14, out_dim)
+
+        def forward(self, x):
+            out = self.network1(x)
+            out = out.view(out.size(0), -1)
+            out = self.network2(out)
+            return out
+
+# Find one pixel for the leftmost digit
+def FindDigit(mask):
+    for c in range(mask.shape[1]):
+        for r in range(mask.shape[0]):
+            if(mask[r,c]==255):
+                return [r,c]
+    return -1
+
+# Cluster all connected pixel into a digit
+def Search(mask, cluster, r, c):
+    cluster.append([r,c])
+    mask[r,c] = 0
+
+    if mask[r-1,c]==255:
+        cluster = Search(mask, cluster, r-1, c)
+    if mask[r+1,c]==255:
+        cluster = Search(mask, cluster, r+1, c)
+    if mask[r,c-1]==255:
+        cluster = Search(mask, cluster, r, c-1)
+    if mask[r,c+1]==255:
+        cluster = Search(mask, cluster, r, c+1)
+    
+    return cluster
+
+# There should not has a digit on edges
+# Reduce noise on edges
+def DeleteEdge(mask):
+    tmp = np.zeros((240, 320))
+    mask[0:40, :] = 0
+    mask[200:240, :] = 0
+    mask[:, 0:20] = 0
+    mask[:, 300:320] = 0
+
+    return mask
+
+# Show all clustering result
+# Just for visualization
+def ShowClusters(mask, clusters):
+    colors = [[255,0,0], [0,255,0], [0,0,255], [255,255,255]]
+    r = mask.shape[0]
+    c = mask.shape[1]
+
+    result = np.zeros((r,c,3))
+    for idx in range(len(clusters)):
+        for coor in clusters[idx]:
+            result[coor[0], coor[1], :] = colors[idx]
+
+    cv2.imshow('clusters', result)
+    cv2.waitKey(0)
+
+def SeperateDigits(digits_cluter):
+    # Save a cluster (a digit) into a jpg file with mnist format
+    for idx in range(len(digits_cluter)):
+        cluster = digits_cluter[idx]
+        if(len(cluster)<30): continue
+        cluster = np.array(cluster)
+        minr = np.min(cluster[:,0])
+        maxr = np.max(cluster[:,0])
+        minc = np.min(cluster[:,1])
+        maxc = np.max(cluster[:,1])
+
+        height = maxr-minr+1
+        width = maxc-minc+1
+
+        # Crop a single digit
+        # Digit is white, and background is black
+        digit = np.zeros((height,width))
+        for r,c in cluster:
+            digit[r-minr,c-minc] = 255
+
+        # Add some black edge to digit
+        result = np.zeros((28, 28))
+        if height>width:
+            small_width = int(width*22/height)
+            smaller_digit = cv2.resize(digit, (small_width, 22))
+            width_start = int((28-small_width)/2)
+            result[3:25, width_start:width_start+small_width] = smaller_digit
+        else:
+            small_height = int(height*22/width)
+            smaller_digit = cv2.resize(digit, ((22, small_height)))
+            height_start = int((28-small_height)/2)
+            result[height_start:height_start+small_height, 3:25] = smaller_digit
+        
+        # Save Digit into a jpg file
+        cv2.imwrite('digit%d.jpg'%idx, result)
+
+def EvaluateDigit(path):
+    #device = torch.device(0)        # GPU board
+    device = torch.device('cpu')    # regular CPU
+
+    in_dim = 28 * 28
+    out_dim = 10
+    nkernels = 32
+
+    model = OneConvLayer(in_dim, out_dim, nkernels).to(device)
+    model.load_state_dict(torch.load('weight_mnist3.pth'))
+
+    img = cv2.imread(path)
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    gray = gray/255
+
+    tensor = torch.from_numpy(gray).float()
+    tensor = tensor.view(1,1,28,28)
+    outputs = model(tensor)
+    _, predicted = torch.max(outputs, 1)
+    print(np.array(predicted)[0])
+    return np.array(predicted)[0]
+
+
+class DigitRecognition(StateMachineProgram):
+    def __init__(self):
+        super().__init__(cam_viewer=False)
+    
+    class ShowDigits(StateNode):
+        def start(self,event=None):
+            super().start()
+            img = np.array(self.robot.world.latest_image.raw_image)
+
+            cv2.imwrite("digits.jpg", img)
+
+            img = cv2.imread("digits.jpg") #(240,320)
+            gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+            # Segmentation
+            mask = cv2.inRange(gray, 0, 65)
+            mask = DeleteEdge(mask)
+
+            # Clustering
+            digits_cluter = []
+            start = FindDigit(mask)
+            while(start!=-1):
+                cluster = []
+                Search(mask, cluster, start[0], start[1])
+                digits_cluter.append(cluster)
+                start = FindDigit(mask)
+    
+            # # Show Clustering Result
+            # print(len(digits_cluter))
+            # ShowClusters(mask, digits_cluter)
+
+            num_digit = len(digits_cluter)
+            SeperateDigits(digits_cluter)
+
+            digit_string = ""
+            for idx in range(num_digit):
+                result = EvaluateDigit("digit%d.jpg"%idx)
+                result_string = ["zero","one","two","three","four","five","six","seven","eight","nine"]
+                
+                digit_string = digit_string+" "+result_string[result]
+            
+            self.robot.say_text(digit_string)
+
+    $setup{
+        StateNode() =T(2)=> self.ShowDigits() 
+    }
+
